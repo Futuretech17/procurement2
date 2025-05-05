@@ -1,0 +1,14 @@
+# Node
+node_modules/
+*.log
+
+# Hardhat build
+artifacts/
+cache/
+
+# React build
+contract-approval-frontend/node_modules/
+contract-approval-frontend/dist/
+
+# Env files
+*.env
