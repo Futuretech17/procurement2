@@ -1,3 +1,4 @@
+// src/utils/contract.js
 import { ethers } from "ethers";
 
 const abi = [
@@ -8,7 +9,6 @@ const abi = [
 
 const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS;
 
-// 👇 Add this helper function
 const switchToLocalhostNetwork = async () => {
   const hardhatChainId = "0x7A69"; // 31337 in hex
   try {
@@ -21,18 +21,16 @@ const switchToLocalhostNetwork = async () => {
       try {
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
-          params: [
-            {
-              chainId: hardhatChainId,
-              chainName: "Hardhat Localhost",
-              rpcUrls: ["http://127.0.0.1:8545"],
-              nativeCurrency: {
-                name: "ETH",
-                symbol: "ETH",
-                decimals: 18,
-              },
+          params: [{
+            chainId: hardhatChainId,
+            chainName: "Hardhat Localhost",
+            rpcUrls: ["http://127.0.0.1:8545"],
+            nativeCurrency: {
+              name: "ETH",
+              symbol: "ETH",
+              decimals: 18,
             },
-          ],
+          }],
         });
       } catch (addError) {
         console.error("Error adding local network:", addError);
@@ -45,12 +43,15 @@ const switchToLocalhostNetwork = async () => {
   }
 };
 
-export const getContract = async () => {
-  if (!window.ethereum) throw new Error("MetaMask not found");
-
-  await switchToLocalhostNetwork(); // ✅ Enforce correct network before proceeding
+const getContractInstance = async () => {
+  if (!window.ethereum) {
+    throw new Error("Ethereum provider not found");
+  }
+  await switchToLocalhostNetwork();
 
   const provider = new ethers.BrowserProvider(window.ethereum);
-  const signer = await provider.getSigner(); // ethers v6 requires 'await' here
+  const signer = await provider.getSigner();
   return new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
 };
+
+export default getContractInstance;

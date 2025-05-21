@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { getContract } from "../utils/contract";
+import { getProcurementContract } from "../utils/contract";
 
 const CreateContractForm = () => {
   const [title, setTitle] = useState("");
@@ -39,7 +39,9 @@ const CreateContractForm = () => {
       setLoading(true);
 
       const fileHash = await uploadFileToBackendIPFS(file);
-      const contract = await getContract();
+
+      // Use full ABI contract instance here
+      const contract = await getProcurementContract();
 
       const tx = await contract.createContract(
         title,
@@ -92,7 +94,9 @@ const CreateContractForm = () => {
       />
       <button
         onClick={submit}
-        className={`bg-green-600 text-white px-4 py-2 rounded ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        className={`bg-green-600 text-white px-4 py-2 rounded ${
+          loading ? "opacity-50 cursor-not-allowed" : ""
+        }`}
         disabled={loading}
       >
         {loading ? "Creating..." : "Submit Contract"}
