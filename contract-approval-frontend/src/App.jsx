@@ -7,6 +7,9 @@ import ProcurementDashboard from "./pages/ProcurementDashboard";
 import ApproverDashboard from "./pages/ApproverDashboard";
 import AuditorDashboard from "./pages/AuditorDashboard";
 import ModificationApprovalDashboard from './components/ModificationApprovalDashboard';
+import ProcurementContracts from "./pages/ProcurementContracts";
+import EditContract from "./pages/EditContract"; 
+import ModificationRequestForm from './components/ModificationRequestForm';
 
 function App() {
   const [provider, setProvider] = useState(null);
@@ -30,6 +33,9 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/dashboard/procurement" element={<ProcurementDashboard />} />
+        <Route path="/dashboard/procurement/contracts" element={<ProcurementContracts />} />
+        <Route path="/dashboard/procurement/contracts/edit/:id" element={<EditContract />} />
+        <Route path="/dashboard/procurement/contracts/request-modification/:id" element={<ModificationRequestForm />} />
         <Route
           path="/dashboard/approver"
           element={<ApproverDashboard provider={provider} currentAccount={currentAccount} />}

@@ -19,11 +19,7 @@ async function main() {
   console.log("APPROVER 2:", approver2.address);
   console.log("AUDITOR:", auditor.address);
 
-  // Set user roles explicitly (owner is already procurement by default)
-  await contract.setUserRole(deployer.address, "PROCUREMENT");
-  await contract.setUserRole(approver1.address, "APPROVER");
-  await contract.setUserRole(approver2.address, "APPROVER");
-  await contract.setUserRole(auditor.address, "AUDITOR");
+  // Removed all calls to contract.setUserRole
 }
 
 main().catch((error) => {

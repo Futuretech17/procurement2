@@ -1,123 +1,150 @@
 import React, { useEffect, useState } from "react";
-import { getProcurementContract } from "../utils/contract"; // Assuming this handles contract connection
+import { getProcurementContract } from "../utils/contract"; // Contract connection utility
+import { useNavigate } from "react-router-dom";
+
+const truncateAddress = (address) =>
+  address ? address.slice(0, 6) + "..." + address.slice(-4) : "";
 
 const ContractList = () => {
   const [contracts, setContracts] = useState([]);
   const [counter, setCounter] = useState(0);
+  const [userRole, setUserRole] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchContracts = async () => {
       try {
         const contract = await getProcurementContract();
-        const total = await contract.contractCounter(); 
-        const totalCount = total.toString();
+        const total = await contract.contractCounter();
+        const totalCount = total.toNumber ? total.toNumber() : Number(total);
         setCounter(totalCount);
-    
+
         const allContracts = [];
+
         for (let i = 1; i <= totalCount; i++) {
           try {
             const c = await contract.getContract(i);
-            console.log("Contract Data:", c);
-    
-            // Initialize lastModified with a default value
-            let lastModified = null;
-    
-            // Check if c[8] is a BigInt and handle it accordingly
-            if (c[8] && typeof c[8] === 'bigint') {
-              // Convert BigInt to number and then to date (convert to milliseconds)
-              const timestamp = Number(c[8]); // Convert BigInt to number
-              if (!isNaN(timestamp) && timestamp !== 0) {
-                lastModified = new Date(timestamp * 1000).toLocaleString(); // Convert to date
-              } else {
-                console.warn(`Invalid timestamp at contract ${i}:`, c[8]);
-                lastModified = "Invalid Date"; // Fallback if timestamp is invalid
-              }
-            } else if (typeof c[8] === 'number') {
-              // If it's already a number, directly convert to date
-              if (c[8] !== 0) {
-                lastModified = new Date(c[8] * 1000).toLocaleString(); // Convert to date
-              } else {
-                lastModified = "Invalid Date"; // Fallback if timestamp is zero
-              }
-            } else {
-              // Handle cases where the type of c[8] is unexpected
-              console.warn(`Invalid lastModified data type at contract ${i}:`, c[8]);
-              lastModified = "Invalid Date"; // Fallback if invalid type
+
+            // Convert UNIX timestamp to readable string
+            let lastModified = "N/A";
+            const ts = Number(c[9]);
+            if (!isNaN(ts) && ts !== 0) {
+              lastModified = new Date(ts * 1000).toLocaleString();
             }
-    
-            // Create a formatted contract object with all required properties
+
             const formatted = {
-              id: c[0].toString(),  // Contract ID (BigNumber -> string)
-              title: c[1],          // Title
-              description: c[2],    // Description
-              creator: c[3],        // Creator address
-              value: c[4].toString(), // Value (BigNumber -> string)
-              fileHash: c[5],       // File hash
-              approvals: c[6].toString(), // Approvals (BigNumber -> string)
-              isApproved: c[7],     // Approval status (boolean)
-              lastModified: lastModified, // Convert timestamp to readable date
+              id: c[0].toString(),
+              title: c[1],
+              description: c[2],
+              supplier: c[3],
+              creator: c[4],
+              value: Number(c[5]).toLocaleString(),
+              fileHash: c[6],
+              approvals: c[7].toString(),
+              isApproved: c[8],
+              lastModified,
             };
-    
+
             allContracts.push(formatted);
-          } catch (innerErr) {
-            console.error(`Failed to load contract at index ${i}:`, innerErr);
+          } catch (err) {
+            console.error(`Error loading contract ${i}:`, err);
           }
         }
-    
-        // Check the user's role to filter contracts based on permissions
-        const currentUser = await contract.getUserRole(window.ethereum.selectedAddress);
-        if (currentUser === "PROCUREMENT") {
-          // Filter contracts created by the current user
-          const userContracts = allContracts.filter(
-            (c) => c.creator.toLowerCase() === window.ethereum.selectedAddress.toLowerCase()
-          );
-          setContracts(userContracts);  // Set filtered contracts
+
+        // Get user address and role
+        const userAddress = window.ethereum.selectedAddress?.toLowerCase();
+        const role = await contract.getUserRole(userAddress);
+        setUserRole(role);
+
+        if (role === "PROCUREMENT") {
+          setContracts(allContracts.filter(c => c.creator.toLowerCase() === userAddress));
         } else {
-          setContracts(allContracts);  // Set all contracts for other roles
+          setContracts(allContracts);
         }
       } catch (error) {
-        console.error("Failed to fetch contracts:", error);
+        console.error("Error fetching contracts:", error);
       }
     };
-    
-    
+
     fetchContracts();
   }, []);
+
+  if (userRole === null) {
+    return <p className="text-gray-500">Loading user information...</p>;
+  }
 
   return (
     <div>
       {contracts.length === 0 ? (
-        <p className="text-gray-500">No contracts found.</p>
+        <p className="text-gray-500 text-center mt-8">No contracts found.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contracts.map((c, idx) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {contracts.map((c) => (
             <div
-              key={idx}
-              className="border rounded-lg shadow-sm bg-white p-4 hover:shadow-md transition"
+              key={c.id}
+              className="border rounded-lg shadow-sm bg-white p-6 hover:shadow-lg transition duration-300"
+              role="region"
+              aria-label={`Contract ${c.title}`}
             >
-              <h4 className="text-lg font-semibold mb-1">{c.title}</h4>
-              <p className="text-sm text-gray-700 mb-2">{c.description}</p>
+              <h3 className="text-xl font-semibold mb-2 text-gray-900">{c.title}</h3>
 
-              {/* 🌐 IPFS File Link */}
+              <p className="text-sm text-gray-700 mb-2">
+                <strong>Description:</strong> {c.description}
+              </p>
+
+              <p className="text-sm text-gray-700 mb-1">
+                <strong>Supplier:</strong> {c.supplier}
+              </p>
+
+              <p className="text-sm text-gray-700 mb-1">
+                <strong>Contract Value:</strong> KES {c.value}
+              </p>
+
+              <p className="text-sm text-gray-700 mb-1">
+                <strong>Creator:</strong>{" "}
+                <span title={c.creator} className="font-mono text-gray-600">
+                  {truncateAddress(c.creator)}
+                </span>
+              </p>
+
+              <p className="text-sm text-gray-700 mb-2">
+                <strong>Approvals:</strong> {c.approvals}
+              </p>
+
               <a
                 href={`https://ipfs.io/ipfs/${c.fileHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-sm mb-2 block"
+                className="text-blue-600 hover:underline text-sm mb-3 block"
+                aria-label={`View contract file for ${c.title}`}
               >
-                📄 View Contract File
+                📄 View Contract Document
               </a>
 
-              <p className="text-sm">
-                Status:{" "}
-                <span className={c.isApproved ? "text-green-600" : "text-red-600"}>
+              <p className="text-sm mb-2">
+                <strong>Status:</strong>{" "}
+                <span
+                  className={c.isApproved ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}
+                >
                   {c.isApproved ? "✅ Approved" : "❌ Not Approved"}
                 </span>
               </p>
-              <p className="text-xs text-gray-400 mt-2">Last Modified: {c.lastModified}</p>
+
+              <p className="text-xs text-gray-400 mb-4">
+                <strong>Last Modified:</strong> {c.lastModified}
+              </p>
+
+              {c.isApproved && userRole === "PROCUREMENT" && (
+                <button
+                  onClick={() => navigate(`/dashboard/procurement/contracts/request-modification/${c.id}`)}
+                  className="mt-auto bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm w-full"
+                  aria-label={`Request modification for contract ${c.title}`}
+                >
+                  📝 Request Modification
+                </button>
+              )}
             </div>
           ))}
-
         </div>
       )}
     </div>
