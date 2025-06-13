@@ -32,6 +32,13 @@ contract ProcurementApproval {
         uint approvals;
     }
 
+    struct AuditLog {
+        uint timestamp;
+        string action;
+        address actor;
+        string notes;
+    }
+
     uint public contractCounter;
 
     mapping(uint => ProcurementContract) private contractStorage;
@@ -39,6 +46,7 @@ contract ProcurementApproval {
     mapping(uint => bool) private hasPendingModification;
     mapping(uint => mapping(address => bool)) public approvedBy;
     mapping(uint => mapping(address => bool)) public reviewedBy;
+    mapping(uint => AuditLog[]) private auditLogs;
 
     address[] public approvers;
 
@@ -46,13 +54,17 @@ contract ProcurementApproval {
     uint256 public constant MAX_MODIFICATION_VALUE_INCREASE_PERCENT = 25;
     uint256 public constant MAX_TIME_EXTENSION_DAYS = 30;
 
-    constructor(address[] memory _approvers) {
+    constructor(address[] memory _approvers, address[] memory _auditors) {
         owner = msg.sender;
         roles[msg.sender] = Role.PROCUREMENT;
 
         approvers = _approvers;
         for (uint i = 0; i < _approvers.length; i++) {
             roles[_approvers[i]] = Role.APPROVER;
+        }
+
+        for (uint i = 0; i < _auditors.length; i++) {
+            roles[_auditors[i]] = Role.AUDITOR;
         }
     }
 
@@ -71,6 +83,11 @@ contract ProcurementApproval {
         _;
     }
 
+    modifier onlyAuditor() {
+        require(roles[msg.sender] == Role.AUDITOR, "Only auditors allowed");
+        _;
+    }
+
     function createContract(
         string memory _title,
         string memory _description,
@@ -84,7 +101,7 @@ contract ProcurementApproval {
         require(bytes(_supplierName).length > 0, "Supplier name required");
         require(_value > 0, "Value must be > 0");
         require(bytes(_fileHash).length > 0, "File hash required");
-        require(_deliveryDate > block.timestamp, "Delivery date must be future");
+        require(_deliveryDate > block.timestamp, "Delivery date must be in the future");
 
         contractCounter++;
         ProcurementContract storage newContract = contractStorage[contractCounter];
@@ -100,6 +117,7 @@ contract ProcurementApproval {
         newContract.deliveryDate = _deliveryDate;
 
         emit ContractCreated(contractCounter, _title, msg.sender);
+        _logAudit(contractCounter, "Contract Created", msg.sender, _title);
         return contractCounter;
     }
 
@@ -114,10 +132,12 @@ contract ProcurementApproval {
         c.lastModified = block.timestamp;
 
         emit ContractApproved(_id, msg.sender);
+        _logAudit(_id, "Contract Approved", msg.sender, "");
 
         if (c.approvals >= approvers.length) {
             c.isApproved = true;
             emit ContractFullyApproved(_id);
+            _logAudit(_id, "Contract Fully Approved", msg.sender, "");
         }
     }
 
@@ -136,6 +156,7 @@ contract ProcurementApproval {
         c.lastModified = block.timestamp;
 
         emit ContractModified(_id, _newValue, msg.sender);
+        _logAudit(_id, "Direct Value Modified", msg.sender, "Within 10% limit");
     }
 
     function submitModificationRequest(
@@ -150,15 +171,14 @@ contract ProcurementApproval {
         ProcurementContract storage c = contractStorage[_contractId];
 
         uint maxAllowedValue = c.value + (c.value * MAX_MODIFICATION_VALUE_INCREASE_PERCENT) / 100;
-
         if (_newValue > maxAllowedValue) {
-            emit UnauthorizedModificationAttempt(msg.sender, _contractId, "Modification request value increase exceeds 25% limit");
+            emit UnauthorizedModificationAttempt(msg.sender, _contractId, "Value increase exceeds 25% limit");
             revert("Value increase exceeds 25% limit");
         }
 
         if (_newDeliveryDate > c.deliveryDate + (MAX_TIME_EXTENSION_DAYS * 1 days)) {
-            emit UnauthorizedModificationAttempt(msg.sender, _contractId, "Modification request delivery date extension exceeds 30 days");
-            revert("Delivery date extension exceeds 30 days");
+            emit UnauthorizedModificationAttempt(msg.sender, _contractId, "Delivery extension exceeds 30 days");
+            revert("Delivery extension exceeds 30 days");
         }
 
         for (uint i = 0; i < approvers.length; i++) {
@@ -178,6 +198,7 @@ contract ProcurementApproval {
         hasPendingModification[_contractId] = true;
 
         emit ModificationRequested(_contractId, _newValue, msg.sender);
+        _logAudit(_contractId, "Modification Requested", msg.sender, _newDescription);
     }
 
     function reviewModificationRequest(uint _contractId, bool approve) public onlyApprover {
@@ -193,6 +214,7 @@ contract ProcurementApproval {
         }
 
         emit ModificationReviewed(_contractId, msg.sender, approve);
+        _logAudit(_contractId, "Modification Reviewed", msg.sender, approve ? "Approved" : "Rejected");
 
         if (req.approvals >= approvers.length) {
             req.isReviewed = true;
@@ -207,30 +229,21 @@ contract ProcurementApproval {
             hasPendingModification[_contractId] = false;
 
             emit ModificationApplied(_contractId, req.newValue, msg.sender);
+            _logAudit(_contractId, "Modification Applied", msg.sender, "");
+        } else {
+            uint reviewedCount = countReviewed(_contractId);
+            if (req.approvals * 2 <= approvers.length && reviewedCount == approvers.length) {
+                hasPendingModification[_contractId] = false;
+                req.isReviewed = true;
+                req.isApproved = false;
+                emit ModificationRejected(_contractId, msg.sender);
+                _logAudit(_contractId, "Modification Rejected", msg.sender, "");
+            }
         }
     }
 
     function rejectModificationRequest(uint _contractId) public onlyApprover {
-        require(_contractId > 0 && _contractId <= contractCounter, "Contract does not exist");
-        require(hasPendingModification[_contractId], "No pending modification");
-        require(!reviewedBy[_contractId][msg.sender], "Already reviewed");
-
-        reviewedBy[_contractId][msg.sender] = true;
-
-        ContractModificationRequest storage req = modificationRequests[_contractId];
-
-        emit ModificationReviewed(_contractId, msg.sender, false);
-
-        uint reviewedCount = countReviewed(_contractId);
-        uint approversCount = approvers.length;
-
-        if (req.approvals * 2 <= approversCount && reviewedCount == approversCount) {
-            hasPendingModification[_contractId] = false;
-            req.isReviewed = true;
-            req.isApproved = false;
-
-            emit ModificationRejected(_contractId, msg.sender);
-        }
+        reviewModificationRequest(_contractId, false);
     }
 
     function countReviewed(uint _contractId) internal view returns (uint count) {
@@ -242,7 +255,19 @@ contract ProcurementApproval {
         return count;
     }
 
-    // Main getter for frontend - returns 10 fields as expected
+    function _logAudit(uint _contractId, string memory action, address actor, string memory notes) internal {
+        auditLogs[_contractId].push(AuditLog({
+            timestamp: block.timestamp,
+            action: action,
+            actor: actor,
+            notes: notes
+        }));
+    }
+
+    function getAuditLogs(uint _contractId) public view onlyAuditor returns (AuditLog[] memory) {
+        return auditLogs[_contractId];
+    }
+
     function getContract(uint _id) public view returns (
         uint id,
         string memory title,
@@ -271,7 +296,6 @@ contract ProcurementApproval {
         );
     }
 
-    // Additional getter for delivery date if needed
     function getDeliveryDate(uint _id) public view returns (uint) {
         require(_id > 0 && _id <= contractCounter, "Contract does not exist");
         return contractStorage[_id].deliveryDate;
@@ -285,19 +309,30 @@ contract ProcurementApproval {
         return allContracts;
     }
 
-    // Role management
-    function assignRole(address _addr, Role _role) public onlyOwner {
-        roles[_addr] = _role;
+    function getUserRole(address _user) public view returns (Role) {
+        return roles[_user];
     }
 
-    // Events
-    event ContractCreated(uint id, string title, address creator);
-    event ContractApproved(uint id, address approver);
+    function hasApproved(uint _contractId, address _user) public view returns (bool) {
+        return approvedBy[_contractId][_user];
+    }
+
+    function hasReviewed(uint _contractId, address _user) public view returns (bool) {
+        return reviewedBy[_contractId][_user];
+    }
+
+    function isModificationPending(uint _contractId) public view returns (bool) {
+        return hasPendingModification[_contractId];
+    }
+
+    // --- EVENTS ---
+    event ContractCreated(uint id, string title, address indexed creator);
+    event ContractApproved(uint id, address indexed approver);
     event ContractFullyApproved(uint id);
-    event ContractModified(uint id, uint newValue, address modifiedBy);
-    event UnauthorizedModificationAttempt(address indexed by, uint indexed contractId, string reason);
-    event ModificationRequested(uint contractId, uint newValue, address requestedBy);
-    event ModificationReviewed(uint contractId, address reviewer, bool approved);
-    event ModificationApplied(uint contractId, uint newValue, address appliedBy);
-    event ModificationRejected(uint contractId, address rejectedBy);
+    event ContractModified(uint id, uint newValue, address indexed modifiedBy);
+    event UnauthorizedModificationAttempt(address indexed user, uint contractId, string reason);
+    event ModificationRequested(uint contractId, uint newValue, address indexed requestedBy);
+    event ModificationReviewed(uint contractId, address indexed reviewer, bool approved);
+    event ModificationApplied(uint contractId, uint newValue, address indexed appliedBy);
+    event ModificationRejected(uint contractId, address indexed rejectedBy);
 }

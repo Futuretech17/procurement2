@@ -1,17 +1,32 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors'); // Import CORS
-const ipfsRouter = require('./api/ipfs'); // Import the IPFS route
+const cors = require('cors');
+const mongoose = require('mongoose');
+const ipfsRouter = require('./routes/ipfs');      // Your IPFS routes
+const authRoutes = require('./routes/auth');      // Auth routes (register/login)
+const adminRoutes = require('./routes/admin');
+
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Enable CORS for all routes
-app.use(cors());  // This will allow all origins, which is useful in development
-
+// Middleware
+app.use(cors());
 app.use(bodyParser.json());
-app.use('/api/ipfs', ipfsRouter); // API route for IPFS uploads
 
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/procurement')
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// Routes
+app.use('/api/ipfs', ipfsRouter);
+app.use('/api/auth', authRoutes);  // All auth routes start with /api/auth
+app.use('/admin', adminRoutes);
+
+
+// Start server
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`🚀 Server running on port ${port}`);
 });

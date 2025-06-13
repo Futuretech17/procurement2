@@ -1,28 +1,27 @@
 const hre = require("hardhat");
 
 async function main() {
-  // Get multiple accounts from the local Hardhat node
-  const [deployer, approver1, approver2, auditor] = await hre.ethers.getSigners();
+  const [deployer, approver1, approver2, auditor1] = await hre.ethers.getSigners();
 
-  // Define approvers array (two approvers here)
+  console.log("Deploying contract with deployer:", deployer.address);
+
   const approvers = [approver1.address, approver2.address];
+  const auditors = [auditor1.address];
 
-  // Deploy the contract with the approvers
-  const ProcurementApproval = await hre.ethers.getContractFactory("ProcurementApproval");
-  const contract = await ProcurementApproval.deploy(approvers);
+  const ProcurementApprovalFactory = await hre.ethers.getContractFactory("ProcurementApproval");
+
+  // Deploy contract
+  const contract = await ProcurementApprovalFactory.deploy(approvers, auditors);
+
+  // Wait for the deployment to complete
   await contract.waitForDeployment();
 
-  console.log("Contract deployed to:", await contract.getAddress());
-  console.log("Roles assigned:");
-  console.log("PROCUREMENT OFFICER:", deployer.address);
-  console.log("APPROVER 1:", approver1.address);
-  console.log("APPROVER 2:", approver2.address);
-  console.log("AUDITOR:", auditor.address);
-
-  // Removed all calls to contract.setUserRole
+  console.log("✅ Contract deployed at:", await contract.getAddress());
+  console.log("👤 Approvers:", approvers);
+  console.log("🔍 Auditors:", auditors);
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+  console.error("❌ Deployment failed:", error);
+  process.exit(1);
 });

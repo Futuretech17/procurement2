@@ -1,8 +1,29 @@
 // src/components/Sidebar.jsx
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
-export default function Sidebar() {
+export default function Sidebar({ role }) {
+  const menuItems = {
+    procurement: [
+      { label: 'Dashboard', path: '/dashboard/procurement' },
+      { label: 'All Contracts', path: '/dashboard/procurement/contracts' },
+      { label: 'Create Contract', path: '/dashboard/procurement/contracts/create' },
+      { label: 'Modification Requests', path: '/dashboard/procurement/modification-requests' },
+      { label: 'Audit Trail', path: '/dashboard/procurement/audit-trail' },
+      { label: 'Profile', path: '/dashboard/procurement/profile' },
+    ],
+    approver: [
+      { label: 'Dashboard', path: '/dashboard/approver' },
+      { label: 'Pending Contract Approvals', path: '/dashboard/approver/pending-approvals' },
+      { label: 'All Contracts', path: '/dashboard/approver/contracts' },
+      { label: 'Modification Requests', path: '/dashboard/approver/modification-requests' },
+      { label: 'Audit Trail', path: '/dashboard/approver/audit-trail' },
+      { label: 'Profile', path: '/dashboard/approver/profile' },
+    ],
+  };
+
+  const items = menuItems[role] || [];
+
   return (
     <nav style={{
       width: '220px',
@@ -12,10 +33,20 @@ export default function Sidebar() {
       height: '100vh',
     }}>
       <ul style={{ listStyle: 'none', padding: 0 }}>
-        <li><Link to="/dashboard/procurement">Dashboard</Link></li>
-        <li><Link to="/dashboard/procurement/contracts">Contracts</Link></li>
-        <li><Link to="/dashboard/procurement/contracts/create">Create Contract</Link></li>
-        <li><Link to="/dashboard/procurement/modification-requests">Modification Requests</Link></li>
+        {items.map(({ label, path }) => (
+          <li key={path} style={{ marginBottom: '12px' }}>
+            <NavLink 
+              to={path} 
+              style={({ isActive }) => ({
+                textDecoration: 'none',
+                color: isActive ? '#007bff' : '#333',
+                fontWeight: isActive ? 'bold' : 'normal',
+              })}
+            >
+              {label}
+            </NavLink>
+          </li>
+        ))}
       </ul>
     </nav>
   );

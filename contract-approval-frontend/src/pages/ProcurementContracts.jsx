@@ -1,19 +1,185 @@
-import React from "react";
-import ContractList from "../components/ContractList";
-import Sidebar from "../components/Sidebar";
+// src/pages/ProcurementContracts.jsx
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ethers } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contract/contractABI";
 
 const ProcurementContracts = () => {
+  const [contracts, setContracts] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadContracts = async () => {
+      try {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        // ✅ Replaced looping logic with getAllContracts() call
+        const rawContracts = await contract.getAllContracts();
+
+        const items = rawContracts.map((data, index) => ({
+          id: index,
+          title: data.title,
+          vendor: data.vendor,
+          amount: `KES ${ethers.formatEther(data.amount)}`,
+          status:
+            data.status === 0
+              ? "Pending"
+              : data.status === 1
+              ? "Approved"
+              : "Modified",
+        }));
+
+        setContracts(items);
+      } catch (error) {
+        console.error("Error loading contracts:", error);
+      }
+    };
+
+    loadContracts();
+  }, []);
+
+  const handleView = (id) => {
+    navigate(`/dashboard/procurement/contracts/view/${id}`);
+  };
+
+  const handleEdit = (id) => {
+    navigate(`/dashboard/procurement/contracts/edit/${id}`);
+  };
+
+  const handleRequestModification = (id) => {
+    navigate(`/dashboard/procurement/contracts/request-modification/${id}`);
+  };
+
   return (
-    <div className="flex">
-      <Sidebar />
-      <div className="flex-1 p-8 bg-gray-100 min-h-screen">
-        <h2 className="text-2xl font-bold mb-6">Procurement Contracts</h2>
-        <div className="bg-white p-6 rounded shadow">
-          <ContractList />
-        </div>
-      </div>
+    <div style={styles.container}>
+      <h2 style={styles.header}>Procurement Contracts</h2>
+
+      <table style={styles.contractsTable}>
+        <thead>
+          <tr style={styles.tableRow}>
+            <th style={styles.tableHeader}>Title</th>
+            <th style={styles.tableHeader}>Vendor</th>
+            <th style={styles.tableHeader}>Amount</th>
+            <th style={styles.tableHeader}>Status</th>
+            <th style={styles.tableHeader}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {contracts.map((contract) => (
+            <tr key={contract.id} style={styles.tableRow}>
+              <td style={styles.tableCell}>{contract.title}</td>
+              <td style={styles.tableCell}>{contract.vendor}</td>
+              <td style={styles.tableCell}>{contract.amount}</td>
+              <td style={styles.tableCell}>
+                <span style={getStatusStyle(contract.status)}>
+                  {contract.status}
+                </span>
+              </td>
+              <td style={styles.tableCell}>
+                <button
+                  style={styles.button}
+                  onClick={() => handleView(contract.id)}
+                >
+                  View
+                </button>
+                {contract.status === "Pending" && (
+                  <button
+                    style={styles.button}
+                    onClick={() => handleEdit(contract.id)}
+                  >
+                    Edit
+                  </button>
+                )}
+                {contract.status === "Approved" && (
+                  <button
+                    style={styles.button}
+                    onClick={() => handleRequestModification(contract.id)}
+                  >
+                    Request Modification
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
+
+const styles = {
+  container: {
+    padding: "2rem",
+    fontFamily: "'Roboto', sans-serif",
+    backgroundColor: "#f9fafb",
+    minHeight: "100vh",
+  },
+  header: {
+    fontSize: "1.8rem",
+    fontWeight: "600",
+    marginBottom: "1.5rem",
+    color: "#2c3e50",
+  },
+  contractsTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    backgroundColor: "#fff",
+    borderRadius: "8px",
+    overflow: "hidden",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+  },
+  tableHeader: {
+    backgroundColor: "#2980b9",
+    color: "#fff",
+    textAlign: "left",
+    padding: "1rem",
+  },
+  tableRow: {
+    borderBottom: "1px solid #e1e4e8",
+  },
+  tableCell: {
+    padding: "1rem",
+    color: "#2c3e50",
+  },
+  button: {
+    backgroundColor: "#2980b9",
+    color: "#fff",
+    border: "none",
+    padding: "0.5rem 1rem",
+    borderRadius: "6px",
+    marginRight: "0.5rem",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "0.95rem",
+    transition: "background-color 0.3s",
+  },
+  statusPending: {
+    color: "#e67e22",
+    fontWeight: "600",
+  },
+  statusApproved: {
+    color: "#27ae60",
+    fontWeight: "600",
+  },
+  statusModified: {
+    color: "#c0392b",
+    fontWeight: "600",
+  },
+};
+
+function getStatusStyle(status) {
+  switch (status) {
+    case "Pending":
+      return styles.statusPending;
+    case "Approved":
+      return styles.statusApproved;
+    case "Modified":
+      return styles.statusModified;
+    default:
+      return {};
+  }
+}
 
 export default ProcurementContracts;

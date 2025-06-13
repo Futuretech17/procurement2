@@ -1,6 +1,84 @@
 import React, { useState } from "react";
 import { getProcurementContract } from "../utils/contract";
 
+const styles = {
+  container: {
+    maxWidth: "600px",
+    margin: "2rem auto",
+    padding: "2rem",
+    fontFamily: "'Roboto', sans-serif",
+    backgroundColor: "#f9fafb",
+    borderRadius: "8px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+    color: "#2c3e50",
+  },
+  header: {
+    fontSize: "1.8rem",
+    fontWeight: "600",
+    marginBottom: "1.5rem",
+    color: "#2980b9",
+    textAlign: "center",
+  },
+  label: {
+    display: "block",
+    marginBottom: "0.5rem",
+    fontWeight: "600",
+  },
+  required: {
+    color: "#e74c3c",
+  },
+  input: {
+    width: "100%",
+    padding: "0.6rem 1rem",
+    marginBottom: "1.25rem",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    fontSize: "1rem",
+    color: "#34495e",
+    boxSizing: "border-box",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: "80px",
+    padding: "0.6rem 1rem",
+    marginBottom: "1.25rem",
+    borderRadius: "6px",
+    border: "1px solid #ccc",
+    fontSize: "1rem",
+    color: "#34495e",
+    resize: "vertical",
+    boxSizing: "border-box",
+  },
+  dateGroup: {
+    display: "flex",
+    gap: "1rem",
+    marginBottom: "1.25rem",
+  },
+  button: {
+    width: "100%",
+    padding: "0.75rem",
+    backgroundColor: "#2980b9",
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: "1.1rem",
+    border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
+    transition: "background-color 0.3s ease",
+  },
+  buttonDisabled: {
+    backgroundColor: "#95a5a6",
+    cursor: "not-allowed",
+  },
+  fileInput: {
+    marginBottom: "1.5rem",
+  },
+  errorText: {
+    color: "#e74c3c",
+    marginBottom: "1rem",
+  },
+};
+
 const CreateContractForm = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -11,8 +89,10 @@ const CreateContractForm = () => {
   const [specialConditions, setSpecialConditions] = useState("");
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleFileChange = (e) => {
+    setError("");
     if (e.target.files.length > 0) {
       setFile(e.target.files[0]);
     }
@@ -36,8 +116,9 @@ const CreateContractForm = () => {
   };
 
   const submit = async () => {
+    setError("");
+
     try {
-      // Validate required fields
       if (
         !title.trim() ||
         !description.trim() ||
@@ -47,18 +128,16 @@ const CreateContractForm = () => {
         !endDate ||
         !file
       ) {
-        alert("Please fill all required fields and select a file.");
+        setError("Please fill all required fields and select a file.");
         return;
       }
 
-      // Validate numeric value
       const numericValue = Number(value);
       if (isNaN(numericValue) || numericValue <= 0) {
-        alert("Please enter a valid positive number for Value.");
+        setError("Please enter a valid positive number for Value.");
         return;
       }
 
-      // Validate dates (startDate < endDate and both future)
       const startTimestamp = Math.floor(new Date(startDate).getTime() / 1000);
       const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
       const nowTimestamp = Math.floor(Date.now() / 1000);
@@ -69,35 +148,31 @@ const CreateContractForm = () => {
         startTimestamp <= nowTimestamp ||
         endTimestamp <= startTimestamp
       ) {
-        alert("Please enter valid future start and end dates, with end date after start date.");
+        setError(
+          "Please enter valid future start and end dates, with end date after start date."
+        );
         return;
       }
 
       setLoading(true);
 
-      // Upload file and get IPFS hash
       const fileHash = await uploadFileToBackendIPFS(file);
 
-      // Get contract instance
       const contract = await getProcurementContract();
 
-      // Call smart contract createContract method
-      // You need to update the smart contract to accept startDate, endDate, specialConditions if storing on-chain
-      // For now, we just pass current parameters (adjust as per your contract)
       const tx = await contract.createContract(
         title.trim(),
         description.trim(),
         supplier.trim(),
         BigInt(numericValue),
         fileHash,
-        endTimestamp // Example: use end date timestamp (or startTimestamp if that's your design)
+        endTimestamp
       );
 
       await tx.wait();
 
       alert("Contract created successfully!");
 
-      // Reset form
       setTitle("");
       setDescription("");
       setSupplier("");
@@ -106,86 +181,77 @@ const CreateContractForm = () => {
       setEndDate("");
       setSpecialConditions("");
       setFile(null);
-
-      // Clear file input
       document.getElementById("fileInput").value = null;
     } catch (err) {
-      console.error("Error:", err.message || err);
-      alert("Error creating contract: " + (err.message || err));
+      setError(err.message || "Error creating contract");
+      console.error("Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-xl mx-auto p-6 bg-white shadow-md rounded-md">
-      <h3 className="text-2xl font-semibold mb-6 text-gray-800">Create New Contract</h3>
+    <div style={styles.container}>
+      <h3 style={styles.header}>Create New Contract</h3>
 
-      <div className="mb-4">
-        <label htmlFor="title" className="block mb-1 font-medium text-gray-700">
-          Title<span className="text-red-500">*</span>:
-        </label>
-        <input
-          id="title"
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g., Supply of Office Stationery"
-          className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-          disabled={loading}
-        />
-      </div>
+      {error && <p style={styles.errorText}>{error}</p>}
 
-      <div className="mb-4">
-        <label htmlFor="description" className="block mb-1 font-medium text-gray-700">
-          Description<span className="text-red-500">*</span>:
-        </label>
-        <textarea
-          id="description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Contract details and scope"
-          className="w-full border border-gray-300 rounded px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
-          rows={4}
-          disabled={loading}
-        />
-      </div>
+      <label htmlFor="title" style={styles.label}>
+        Title <span style={styles.required}>*</span>:
+      </label>
+      <input
+        id="title"
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="e.g., Supply of Office Stationery"
+        style={styles.input}
+        disabled={loading}
+      />
 
-      <div className="mb-4">
-        <label htmlFor="supplier" className="block mb-1 font-medium text-gray-700">
-          Supplier Name<span className="text-red-500">*</span>:
-        </label>
-        <input
-          id="supplier"
-          type="text"
-          value={supplier}
-          onChange={(e) => setSupplier(e.target.value)}
-          placeholder="e.g., ABC Stationery Ltd."
-          className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-          disabled={loading}
-        />
-      </div>
+      <label htmlFor="description" style={styles.label}>
+        Description <span style={styles.required}>*</span>:
+      </label>
+      <textarea
+        id="description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Contract details and scope"
+        style={styles.textarea}
+        disabled={loading}
+      />
 
-      <div className="mb-4">
-        <label htmlFor="value" className="block mb-1 font-medium text-gray-700">
-          Contract Value (KES)<span className="text-red-500">*</span>:
-        </label>
-        <input
-          id="value"
-          type="number"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="e.g., 5000000"
-          min="0"
-          className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-          disabled={loading}
-        />
-      </div>
+      <label htmlFor="supplier" style={styles.label}>
+        Supplier Name <span style={styles.required}>*</span>:
+      </label>
+      <input
+        id="supplier"
+        type="text"
+        value={supplier}
+        onChange={(e) => setSupplier(e.target.value)}
+        placeholder="e.g., ABC Stationery Ltd."
+        style={styles.input}
+        disabled={loading}
+      />
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="startDate" className="block mb-1 font-medium text-gray-700">
-            Contract Start Date<span className="text-red-500">*</span>:
+      <label htmlFor="value" style={styles.label}>
+        Contract Value (KES) <span style={styles.required}>*</span>:
+      </label>
+      <input
+        id="value"
+        type="number"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="e.g., 5000000"
+        min="0"
+        style={styles.input}
+        disabled={loading}
+      />
+
+      <div style={styles.dateGroup}>
+        <div style={{ flex: 1 }}>
+          <label htmlFor="startDate" style={styles.label}>
+            Contract Start Date <span style={styles.required}>*</span>:
           </label>
           <input
             id="startDate"
@@ -193,14 +259,14 @@ const CreateContractForm = () => {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             min={new Date().toISOString().split("T")[0]}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={styles.input}
             disabled={loading}
           />
         </div>
 
-        <div>
-          <label htmlFor="endDate" className="block mb-1 font-medium text-gray-700">
-            Contract End Date<span className="text-red-500">*</span>:
+        <div style={{ flex: 1 }}>
+          <label htmlFor="endDate" style={styles.label}>
+            Contract End Date <span style={styles.required}>*</span>:
           </label>
           <input
             id="endDate"
@@ -208,46 +274,42 @@ const CreateContractForm = () => {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             min={startDate || new Date().toISOString().split("T")[0]}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+            style={styles.input}
             disabled={loading}
           />
         </div>
       </div>
 
-      <div className="mb-4">
-        <label htmlFor="specialConditions" className="block mb-1 font-medium text-gray-700">
-          Special Conditions (Optional):
-        </label>
-        <textarea
-          id="specialConditions"
-          value={specialConditions}
-          onChange={(e) => setSpecialConditions(e.target.value)}
-          placeholder="e.g., Monthly delivery installments, penalties for delays"
-          className="w-full border border-gray-300 rounded px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-green-500"
-          rows={3}
-          disabled={loading}
-        />
-      </div>
+      <label htmlFor="specialConditions" style={styles.label}>
+        Special Conditions (Optional):
+      </label>
+      <textarea
+        id="specialConditions"
+        value={specialConditions}
+        onChange={(e) => setSpecialConditions(e.target.value)}
+        placeholder="e.g., Monthly delivery installments, penalties for delays"
+        style={styles.textarea}
+        disabled={loading}
+      />
 
-      <div className="mb-6">
-        <label htmlFor="fileInput" className="block mb-1 font-medium text-gray-700">
-          Upload Contract Document (PDF or Image)<span className="text-red-500">*</span>:
-        </label>
-        <input
-          id="fileInput"
-          type="file"
-          onChange={handleFileChange}
-          className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-          disabled={loading}
-          accept="application/pdf,image/*"
-        />
-      </div>
+      <label htmlFor="fileInput" style={styles.label}>
+        Upload Contract Document (PDF or Image) <span style={styles.required}>*</span>:
+      </label>
+      <input
+        id="fileInput"
+        type="file"
+        onChange={handleFileChange}
+        style={styles.fileInput}
+        disabled={loading}
+        accept="application/pdf,image/*"
+      />
 
       <button
         onClick={submit}
-        className={`w-full bg-green-600 text-white font-semibold py-3 rounded hover:bg-green-700 transition ${
-          loading ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        style={{
+          ...styles.button,
+          ...(loading ? styles.buttonDisabled : {}),
+        }}
         disabled={loading}
       >
         {loading ? "Creating..." : "Submit Contract"}
