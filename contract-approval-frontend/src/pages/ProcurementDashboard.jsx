@@ -101,19 +101,32 @@ const ProcurementDashboard = () => {
     const fetchContracts = async () => {
       try {
         const contract = await getProcurementContract();
-        const fetched = await contract.getAllContracts(); // Solidity should return array of contracts
+        const fetched = await contract.getAllContracts();
 
-        const parsed = fetched.map((c, i) => ({
-          id: i,
-          title: c.title,
-          status: statusMap[Number(c.status)],
-        }));
+        const parsed = await Promise.all(
+          fetched.map(async (c, i) => {
+            const modPending = await contract.isModificationPending(i);
+            let status = 'Pending';
+            if (c.isApproved) {
+              status = 'Approved';
+            } else if (modPending) {
+              status = 'Modified';
+            }
+
+            return {
+              id: i,
+              title: c.title,
+              status,
+            };
+          })
+        );
 
         setContracts(parsed);
       } catch (error) {
         console.error("Failed to load contracts:", error);
       }
     };
+
 
     fetchContracts();
   }, []);
@@ -193,16 +206,18 @@ const ProcurementDashboard = () => {
                   {status}
                 </td>
                 <td style={styles.tableCell}>
-                  <button
-                    style={{
-                      ...styles.button,
-                      backgroundColor: '#27ae60',
-                      padding: '0.4rem 0.8rem',
-                      fontSize: '0.9rem',
-                    }}
-                  >
-                    View
-                  </button>
+              <button
+                style={{
+                  ...styles.button,
+                  backgroundColor: '#27ae60',
+                  padding: '0.4rem 0.8rem',
+                  fontSize: '0.9rem',
+                }}
+                onClick={() => navigate(`/dashboard/procurement/contracts/${id}`)} // ✅ Add this line
+              >
+                View
+              </button>
+
                 </td>
               </tr>
             ))

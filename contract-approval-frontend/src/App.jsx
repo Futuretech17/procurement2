@@ -86,10 +86,12 @@ function App() {
         <Route path="/dashboard/procurement" element={<ProcurementLayout currentAccount={currentAccount} />}>
           <Route index element={<ProcurementDashboard />} />
           <Route path="contracts" element={<ProcurementContracts />} />
-          <Route path="contracts/:id" element={<ContractDetail />} /> {/* 🔹 This is new */}
+          <Route path="contracts/view/:id" element={<ContractDetail />} /> 
           <Route path="contracts/edit/:id" element={<EditContract />} />
           <Route path="contracts/create" element={<CreateContractForm />} />
           <Route path="modification-requests" element={<ModificationRequestForm />} />
+          <Route path="/dashboard/procurement/contracts/:id" element={<ContractDetail />} />
+
         </Route>
 
 

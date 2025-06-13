@@ -6,55 +6,60 @@ import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contract/contractABI";
 
 const ProcurementContracts = () => {
   const [contracts, setContracts] = useState([]);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const loadContracts = async () => {
-      try {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+useEffect(() => {
+  const loadContracts = async () => {
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-        // ✅ Replaced looping logic with getAllContracts() call
-        const rawContracts = await contract.getAllContracts();
+    const rawContracts = await contract.getAllContracts();
 
-        const items = rawContracts.map((data, index) => ({
+    const items = await Promise.all(
+      rawContracts.map(async (data, index) => {
+        const hasMod = await contract.hasModificationRequest(index); // check if there's a mod
+
+        return {
           id: index,
-          title: data.title,
-          vendor: data.vendor,
-          amount: `KES ${ethers.formatEther(data.amount)}`,
-          status:
-            data.status === 0
-              ? "Pending"
-              : data.status === 1
-              ? "Approved"
-              : "Modified",
-        }));
+          title: data[1],
+          vendor: data[3] || "N/A",
+          amount: data[5] && data[5] !== null
+            ? `KES ${Number(data[5].toString()).toLocaleString()}`
+            : "N/A",
+          status: hasMod
+            ? "Modified"
+            : data[8]
+            ? "Approved"
+            : "Pending",
+        };
+      })
+    );
 
-        setContracts(items);
-      } catch (error) {
-        console.error("Error loading contracts:", error);
-      }
-    };
+    setContracts(items);
+  } catch (error) {
+    console.error("❌ Error loading contracts:", error);
+    setError("Failed to load contracts.");
+  }
+};
 
-    loadContracts();
-  }, []);
 
-  const handleView = (id) => {
-    navigate(`/dashboard/procurement/contracts/view/${id}`);
-  };
+  loadContracts();
+}, []);
 
-  const handleEdit = (id) => {
-    navigate(`/dashboard/procurement/contracts/edit/${id}`);
-  };
 
-  const handleRequestModification = (id) => {
+  const handleView = (id) => navigate(`/dashboard/procurement/contracts/view/${id}`);
+  const handleEdit = (id) => navigate(`/dashboard/procurement/contracts/edit/${id}`);
+  const handleRequestModification = (id) =>
     navigate(`/dashboard/procurement/contracts/request-modification/${id}`);
-  };
 
   return (
     <div style={styles.container}>
       <h2 style={styles.header}>Procurement Contracts</h2>
+
+      {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
       <table style={styles.contractsTable}>
         <thead>
@@ -73,22 +78,14 @@ const ProcurementContracts = () => {
               <td style={styles.tableCell}>{contract.vendor}</td>
               <td style={styles.tableCell}>{contract.amount}</td>
               <td style={styles.tableCell}>
-                <span style={getStatusStyle(contract.status)}>
-                  {contract.status}
-                </span>
+                <span style={getStatusStyle(contract.status)}>{contract.status}</span>
               </td>
               <td style={styles.tableCell}>
-                <button
-                  style={styles.button}
-                  onClick={() => handleView(contract.id)}
-                >
+                <button style={styles.button} onClick={() => handleView(contract.id)}>
                   View
                 </button>
                 {contract.status === "Pending" && (
-                  <button
-                    style={styles.button}
-                    onClick={() => handleEdit(contract.id)}
-                  >
+                  <button style={styles.button} onClick={() => handleEdit(contract.id)}>
                     Edit
                   </button>
                 )}

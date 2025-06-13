@@ -156,10 +156,28 @@ const CreateContractForm = () => {
 
       setLoading(true);
 
+      // ✅ Ensure wallet is connected
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+
+      // ✅ Upload file to IPFS backend
       const fileHash = await uploadFileToBackendIPFS(file);
 
-      const contract = await getProcurementContract();
+      console.log("📤 Submitting to contract...");
+      console.log("File hash:", fileHash);
+      console.log("Creating contract with:", {
+        title,
+        description,
+        supplier,
+        value: numericValue,
+        fileHash,
+        endTimestamp,
+      });
 
+      // ✅ Load contract
+      const contract = await getProcurementContract();
+      console.log("Contract loaded:", contract);
+
+      // ✅ Send transaction
       const tx = await contract.createContract(
         title.trim(),
         description.trim(),
@@ -168,11 +186,16 @@ const CreateContractForm = () => {
         fileHash,
         endTimestamp
       );
+      
+      console.log("Transaction object:", tx);
 
+      console.log("Transaction sent:", tx.hash);
       await tx.wait();
+      console.log("✅ Contract created on-chain.");
 
       alert("Contract created successfully!");
 
+      // ✅ Reset form
       setTitle("");
       setDescription("");
       setSupplier("");
@@ -183,8 +206,8 @@ const CreateContractForm = () => {
       setFile(null);
       document.getElementById("fileInput").value = null;
     } catch (err) {
+      console.error("❌ Error:", err);
       setError(err.message || "Error creating contract");
-      console.error("Error:", err);
     } finally {
       setLoading(false);
     }
