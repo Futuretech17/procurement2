@@ -6,17 +6,29 @@ import { jwtDecode } from 'jwt-decode';
 import AdminApproval from './pages/AdminApproval';
 import Login from "./pages/Login";
 import Register from "./components/Register";
-import ProcurementDashboard from "./pages/ProcurementDashboard";
-import ProcurementContracts from "./pages/ProcurementContracts";
-import EditContract from "./pages/EditContract";
+import ProcurementDashboard from "./pages/procurementOfficer/ProcurementDashboard";
+import ProcurementContracts from "./pages/procurementOfficer/ProcurementContracts";
+import EditContract from "./pages/procurementOfficer/EditContract";
 import ModificationRequestForm from './components/ModificationRequestForm';
 import ApproverDashboard from "./pages/approver/ApproverDashboard";
-import AuditorDashboard from "./pages/AuditorDashboard";
+import AuditorDashboard from "./pages/auditor/AuditorDashboard";
 import ModificationApprovalDashboard from './components/ModificationApprovalDashboard';
 import CreateContractForm from "./components/CreateContractForm";
 import ProcurementLayout from "./layout/ProcurementLayout";
-import ContractDetail from './pages/ContractDetail';
-import ApproverLayout from "./layout/ApproverLayout"; // ✅ NEW LAYOUT
+import ApproverLayout from "./layout/ApproverLayout";
+import AuditorLayout from "./layout/AuditorLayout";
+import ContractDetail from './components/ContractDetail';
+import PendingApprovals from "./pages/approver/PendingApprovals";
+import ApprovedContracts from "./pages/approver/ApprovedContracts";
+import AllContracts from "./components/AllContracts";
+import ProcurementModificationRequests from './pages/procurementOfficer/ProcurementModificationRequests'; // ⬅️ Add this import at the top
+import AuditTrailViewer from "./components/AuditTrailViewer";
+import UserProfile from './components/UserProfile';
+import ApproverModificationRequests from './pages/approver/ApproverModificationRequests';
+import AuditorAllContracts from "./pages/auditor/AuditorAllContracts"; 
+import AuditorModificationRequests from './pages/auditor/AuditorModificationRequests';
+
+
 
 // Admin Layout
 function AdminLayout({ children }) {
@@ -30,7 +42,7 @@ function AdminLayout({ children }) {
   );
 }
 
-// Role-based route protection
+// Role-based protection
 function RoleProtectedRoute({ userRole, allowedRoles, children }) {
   if (!allowedRoles.includes(userRole)) {
     return <Navigate to="/login" replace />;
@@ -80,34 +92,41 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Procurement Routes */}
+        {/* Procurement Officer Routes */}
         <Route path="/dashboard/procurement" element={<ProcurementLayout currentAccount={currentAccount} />}>
           <Route index element={<ProcurementDashboard />} />
           <Route path="contracts" element={<ProcurementContracts />} />
           <Route path="contracts/view/:id" element={<ContractDetail />} />
           <Route path="contracts/edit/:id" element={<EditContract />} />
           <Route path="contracts/create" element={<CreateContractForm />} />
-          <Route path="modification-requests" element={<ModificationRequestForm />} />
-          <Route path="audit-trail" element={<div>Audit Trail (Coming Soon)</div>} />  {/* 👈 now works */}
-          <Route path="profile" element={<div>Procurement Profile (Coming Soon)</div>} /> {/* 👈 now works */}
+          <Route path="contracts/request-modification/:id" element={<ModificationRequestForm />} />
+          <Route path="modification-requests" element={<ProcurementModificationRequests />} />
+          <Route path="audit-trail" element={<AuditTrailViewer />} />
+          <Route path="profile" element={<UserProfile />} />
         </Route>
-
 
         {/* Approver Routes */}
         <Route path="/dashboard/approver" element={<ApproverLayout currentAccount={currentAccount} />}>
           <Route index element={<ApproverDashboard provider={provider} currentAccount={currentAccount} />} />
-          <Route path="pending-approvals" element={<div>Pending Approvals (Coming Soon)</div>} />
-          <Route path="approved-contracts" element={<div>Approved Contracts (Coming Soon)</div>} />
-          <Route path="contracts" element={<div>All Contracts (Coming Soon)</div>} />
-          <Route path="modification-requests" element={<div>Modification Requests (Coming Soon)</div>} />
-          <Route path="audit-trail" element={<div>Audit Trail (Coming Soon)</div>} />
-          <Route path="profile" element={<div>Approver Profile (Coming Soon)</div>} />
+          <Route path="pending-approvals" element={<PendingApprovals />} />
+          <Route path="approved-contracts" element={<ApprovedContracts />} />
+          <Route path="contracts" element={<AllContracts />} />
+          <Route path="contracts/view/:id" element={<ContractDetail />} /> {/* ✅ Added this line */}
+          <Route path="modification-requests" element={<ApproverModificationRequests />} />
+          <Route path="audit-trail" element={<AuditTrailViewer />} />
+          <Route path="profile" element={<UserProfile />} />
         </Route>
 
-        {/* Auditor + Admin */}
-        <Route path="/dashboard/auditor" element={<AuditorDashboard />} />
-        <Route path="/approver/modifications" element={<ModificationApprovalDashboard />} />
+        {/* Auditor Routes */}
+        <Route path="/dashboard/auditor" element={<AuditorLayout currentAccount={currentAccount} />}>
+          <Route index element={<AuditorDashboard />} />
+          <Route path="contracts" element={<AuditorAllContracts />} />
+          <Route path="modification-requests" element={<AuditorModificationRequests />} />
+          <Route path="audit-trail" element={<AuditTrailViewer />} />
+          <Route path="profile" element={<UserProfile />} />
+        </Route>
 
+        {/* Admin Route */}
         <Route
           path="/dashboard/admin"
           element={
@@ -118,6 +137,9 @@ function App() {
             </RoleProtectedRoute>
           }
         />
+
+        {/* Other Routes */}
+        <Route path="/approver/modifications" element={<ModificationApprovalDashboard />} />
       </Routes>
     </Router>
   );

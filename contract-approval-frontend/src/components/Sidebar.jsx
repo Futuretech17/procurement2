@@ -20,6 +20,13 @@ export default function Sidebar({ role }) {
       { label: 'Audit Trail', path: '/dashboard/approver/audit-trail' },
       { label: 'Profile', path: '/dashboard/approver/profile' },
     ],
+    auditor: [
+      { label: 'Dashboard', path: '/dashboard/auditor' },
+      { label: 'All Contracts', path: '/dashboard/auditor/contracts' },
+      { label: 'Modification Requests', path: '/dashboard/auditor/modification-requests' },
+      { label: 'Audit Trail', path: '/dashboard/auditor/audit-trail' },
+      { label: 'Profile', path: '/dashboard/auditor/profile' },
+    ],
   };
 
   const items = menuItems[role] || [];

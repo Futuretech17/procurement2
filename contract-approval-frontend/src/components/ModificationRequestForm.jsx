@@ -1,6 +1,72 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getProcurementContract } from "../utils/contract";
+import { ethers } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contract/contractABI";
+
+const styles = {
+  container: {
+    padding: '2rem',
+    fontFamily: "'Roboto', sans-serif",
+    backgroundColor: '#f9fafb',
+    minHeight: '100vh',
+  },
+  header: {
+    fontSize: '1.8rem',
+    fontWeight: '600',
+    marginBottom: '2rem',
+    color: '#2c3e50',
+  },
+  form: {
+    backgroundColor: '#fff',
+    padding: '2rem',
+    borderRadius: '8px',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+    maxWidth: '600px',
+    margin: '0 auto',
+  },
+  label: {
+    display: 'block',
+    marginBottom: '0.5rem',
+    fontWeight: '500',
+    color: '#34495e',
+  },
+  input: {
+    width: '100%',
+    padding: '0.8rem',
+    marginBottom: '1.5rem',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '1rem',
+    fontFamily: 'inherit',
+  },
+  textarea: {
+    width: '100%',
+    padding: '0.8rem',
+    height: '100px',
+    marginBottom: '1.5rem',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '1rem',
+    fontFamily: 'inherit',
+  },
+  button: {
+    backgroundColor: '#2980b9',
+    color: '#fff',
+    border: 'none',
+    padding: '0.9rem 1.5rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '1rem',
+    transition: 'background-color 0.3s',
+  },
+  fileInfo: {
+    fontSize: '0.9rem',
+    color: '#555',
+    marginTop: '-1rem',
+    marginBottom: '1.5rem',
+  },
+};
 
 const ModificationRequestForm = () => {
   const { id } = useParams();
@@ -9,26 +75,30 @@ const ModificationRequestForm = () => {
   const [loading, setLoading] = useState(true);
   const [contract, setContract] = useState(null);
   const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    supplier: "",
-    value: "",
-    deliveryDate: "",
+    title: '',
+    description: '',
+    supplier: '',
+    value: '',
+    deliveryDate: '',
   });
-
+  const [newTitle, setNewTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     const fetchContract = async () => {
       try {
-        const contractInstance = await getProcurementContract();
-        const c = await contractInstance.getContract(Number(id));
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
+        const total = await contractInstance.getTotalContracts();
+        if (Number(id) >= Number(total)) throw new Error("Invalid contract ID.");
+
+        const c = await contractInstance.getContractByIndex(Number(id));
         const deliveryTimestamp = Number(c[7]) * 1000;
         const deliveryDateISO = new Date(deliveryTimestamp).toISOString().slice(0, 10);
 
         setContract(c);
-
         setFormData({
           title: c[1],
           description: c[2],
@@ -36,10 +106,10 @@ const ModificationRequestForm = () => {
           value: Number(c[5]).toString(),
           deliveryDate: deliveryDateISO,
         });
-
+        setNewTitle(c[1]); // initialize newTitle with current title
         setLoading(false);
       } catch (err) {
-        console.error("Failed to fetch contract:", err);
+        console.error("Failed to fetch contract:", err.message || err);
         setLoading(false);
       }
     };
@@ -55,150 +125,126 @@ const ModificationRequestForm = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file && file.type !== "application/pdf") {
-      alert("Please upload a PDF file only.");
-      e.target.value = null; // Reset file input
+      alert("Only PDF files allowed.");
+      e.target.value = null;
       return;
     }
     setSelectedFile(file);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!selectedFile) {
       alert("Please upload the modified contract PDF.");
       return;
     }
 
-    // For now, just log form data + file name
-    console.log("Modification request submitted:", formData, selectedFile);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-    // TODO:
-    // 1. Upload selectedFile to IPFS or backend and get file hash
-    // 2. Call smart contract method passing form data and new file hash
+      // Simulated IPFS hash (replace this with actual upload logic later)
+      const fakeIpfsHash = "ipfs://example-fake-hash";
+      const valueInWei = ethers.parseUnits(formData.value, "wei");
+      const deliveryTimestamp = Math.floor(new Date(formData.deliveryDate).getTime() / 1000);
 
-    alert("Modification request submitted! (Upload & contract interaction to be implemented)");
+      const tx = await contractInstance.submitModificationRequest(
+        Number(id),
+        newTitle,
+        formData.description,
+        valueInWei,
+        deliveryTimestamp,
+        fakeIpfsHash
+      );
 
-    navigate("/dashboard/procurement/contracts");
+      await tx.wait();
+      alert("Modification request submitted!");
+      navigate("/dashboard/procurement/contracts");
+    } catch (err) {
+      console.error("Submission error:", err);
+      alert("Error occurred while submitting. Check console for details.");
+    }
   };
 
-  if (loading) return <p>Loading contract data...</p>;
-  if (!contract) return <p className="text-red-600">Contract not found.</p>;
+  if (loading) return <div style={styles.container}><p>Loading contract data...</p></div>;
+  if (!contract) return <div style={styles.container}><p>Contract not found or ID invalid.</p></div>;
 
   return (
-    <div className="max-w-lg mx-auto p-6 bg-white rounded-lg shadow-lg border border-gray-200">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">
-        Request Modification for Contract #{id}
-      </h2>
+    <div style={styles.container}>
+      <h1 style={styles.header}>Submit Modification Request</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Title (read-only) */}
-        <div>
-          <label htmlFor="title" className="block mb-1 font-semibold text-gray-700">
-            Title
-          </label>
-          <input
-            type="text"
-            id="title"
-            name="title"
-            value={formData.title}
-            readOnly
-            className="w-full px-4 py-2 border border-gray-300 rounded bg-gray-100 cursor-not-allowed"
-          />
-        </div>
+      <form style={styles.form} onSubmit={handleSubmit}>
+        <label style={styles.label}>Current Contract Title</label>
+        <input
+          type="text"
+          value={formData.title}
+          readOnly
+          style={{ ...styles.input, backgroundColor: "#f0f0f0", color: "#888", cursor: "not-allowed" }}
+        />
 
-        {/* Description */}
-        <div>
-          <label htmlFor="description" className="block mb-1 font-semibold text-gray-700">
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            rows={4}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <label style={styles.label}>New Contract Title</label>
+        <input
+          type="text"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          required
+          style={styles.input}
+        />
 
-        {/* Supplier */}
-        <div>
-          <label htmlFor="supplier" className="block mb-1 font-semibold text-gray-700">
-            Supplier Name
-          </label>
-          <input
-            type="text"
-            id="supplier"
-            name="supplier"
-            value={formData.supplier}
-            onChange={handleChange}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <label style={styles.label}>Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          required
+          style={styles.textarea}
+        />
 
-        {/* Value */}
-        <div>
-          <label htmlFor="value" className="block mb-1 font-semibold text-gray-700">
-            Contract Value (KES)
-          </label>
-          <input
-            type="number"
-            id="value"
-            name="value"
-            value={formData.value}
-            onChange={handleChange}
-            min="0"
-            step="1000"
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <label style={styles.label}>Supplier Name</label>
+        <input
+          type="text"
+          name="supplier"
+          value={formData.supplier}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        />
 
-        {/* Delivery Date */}
-        <div>
-          <label htmlFor="deliveryDate" className="block mb-1 font-semibold text-gray-700">
-            Delivery Date
-          </label>
-          <input
-            type="date"
-            id="deliveryDate"
-            name="deliveryDate"
-            value={formData.deliveryDate}
-            onChange={handleChange}
-            min={new Date().toISOString().split("T")[0]}
-            required
-            className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <label style={styles.label}>Contract Value (KES)</label>
+        <input
+          type="number"
+          name="value"
+          value={formData.value}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        />
 
-        {/* New Contract PDF Upload */}
-        <div>
-          <label htmlFor="modifiedContractFile" className="block mb-1 font-semibold text-gray-700">
-            Upload Modified Contract Document (PDF)
-          </label>
-          <input
-            type="file"
-            id="modifiedContractFile"
-            accept="application/pdf"
-            onChange={handleFileChange}
-            required
-            className="w-full text-gray-700"
-          />
-          {selectedFile && (
-            <p className="mt-2 text-sm text-gray-600">
-              Selected file: <span className="font-medium">{selectedFile.name}</span>
-            </p>
-          )}
-        </div>
+        <label style={styles.label}>Delivery Date</label>
+        <input
+          type="date"
+          name="deliveryDate"
+          value={formData.deliveryDate}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        />
 
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white font-semibold py-3 rounded hover:bg-blue-700 transition"
-        >
-          Submit Modification Request
+        <label style={styles.label}>Upload Modified Contract (PDF)</label>
+        <input
+          type="file"
+          accept="application/pdf"
+          onChange={handleFileChange}
+          required
+          style={{ marginBottom: '0.5rem' }}
+        />
+        {selectedFile && (
+          <div style={styles.fileInfo}>Selected: {selectedFile.name}</div>
+        )}
+
+        <button type="submit" style={styles.button}>
+          Submit Request
         </button>
       </form>
     </div>

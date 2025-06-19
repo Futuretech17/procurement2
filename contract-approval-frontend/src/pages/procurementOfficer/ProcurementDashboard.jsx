@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getProcurementContract } from '../utils/contract'; // adjust path as needed
-
-const statusMap = ['Pending', 'Approved', 'Modified'];
+import { getProcurementContract } from '../../utils/contract';
 
 const styles = {
   container: {
@@ -55,9 +53,6 @@ const styles = {
     fontSize: '1rem',
     transition: 'background-color 0.3s',
   },
-  buttonHover: {
-    backgroundColor: '#1c5980',
-  },
   contractsTable: {
     width: '100%',
     borderCollapse: 'collapse',
@@ -101,39 +96,61 @@ const ProcurementDashboard = () => {
     const fetchContracts = async () => {
       try {
         const contract = await getProcurementContract();
-        const fetched = await contract.getAllContracts();
+        const total = Number((await contract.getTotalContracts()).toString());
+        const fetchedContracts = [];
 
-        const parsed = await Promise.all(
-          fetched.map(async (c, i) => {
-            const modPending = await contract.isModificationPending(i);
-            let status = 'Pending';
-            if (c.isApproved) {
-              status = 'Approved';
-            } else if (modPending) {
-              status = 'Modified';
-            }
+        for (let i = 1; i <= total; i++) {
+          const data = await contract.getContractByIndex(i);
 
-            return {
-              id: i,
-              title: c.title,
-              status,
-            };
-          })
-        );
+          console.log("Loaded contract at index", i, data);
 
-        setContracts(parsed);
+          const [
+            id,
+            title,
+            description,
+            supplierName,
+            creator,
+            value,
+            fileHash,
+            approvals,
+            isApproved,
+            lastModified
+          ] = data;
+
+          const contractObj = {
+            id: Number(id),
+            title,
+            description,
+            supplierName,
+            creator,
+            value: Number(value.toString()),
+            fileHash,
+            approvals: Number(approvals.toString()),
+            isApproved,
+            lastModified: Number(lastModified.toString()),
+          };
+
+          contractObj.status = isApproved
+            ? 'Approved'
+            : contractObj.approvals > 0
+            ? 'Modified'
+            : 'Pending';
+
+          fetchedContracts.push(contractObj);
+        }
+
+        setContracts(fetchedContracts);
       } catch (error) {
-        console.error("Failed to load contracts:", error);
+        console.error('Failed to load contracts:', error);
       }
     };
-
 
     fetchContracts();
   }, []);
 
   const totalContracts = contracts.length;
-  const pendingCount = contracts.filter(c => c.status === 'Pending').length;
-  const modifiedCount = contracts.filter(c => c.status === 'Modified').length;
+  const pendingCount = contracts.filter((c) => c.status === 'Pending').length;
+  const modifiedCount = contracts.filter((c) => c.status === 'Modified').length;
 
   return (
     <div style={styles.container}>
@@ -163,14 +180,12 @@ const ProcurementDashboard = () => {
         >
           Create New Contract
         </button>
-
         <button
           style={styles.button}
           onClick={() => navigate('/dashboard/procurement/contracts')}
         >
           View All Contracts
         </button>
-
         <button
           style={styles.button}
           onClick={() => navigate('/dashboard/procurement/modification-requests')}
@@ -206,25 +221,26 @@ const ProcurementDashboard = () => {
                   {status}
                 </td>
                 <td style={styles.tableCell}>
-              <button
-                style={{
-                  ...styles.button,
-                  backgroundColor: '#27ae60',
-                  padding: '0.4rem 0.8rem',
-                  fontSize: '0.9rem',
-                }}
-                onClick={() => navigate(`/dashboard/procurement/contracts/${id}`)} // ✅ Add this line
-              >
-                View
-              </button>
-
+                  <button
+                    style={{
+                      ...styles.button,
+                      backgroundColor: '#27ae60',
+                      padding: '0.4rem 0.8rem',
+                      fontSize: '0.9rem',
+                    }}
+                    onClick={() =>
+                      navigate(`/dashboard/procurement/contracts/view/${id}`)
+                    }
+                  >
+                    View
+                  </button>
                 </td>
               </tr>
             ))
           ) : (
             <tr>
               <td style={styles.tableCell} colSpan="3">
-                No contracts available.
+                No procurement contracts found.
               </td>
             </tr>
           )}

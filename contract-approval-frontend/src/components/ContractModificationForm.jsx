@@ -1,7 +1,81 @@
 import React, { useState } from 'react';
 import { ethers } from 'ethers';
-import contractABI from '../abi/ProcurementApproval.json'; // adjust this path
-import contractAddress from '../contract'; // adjust this path
+import contractABI from '../abi/ProcurementApproval.json';
+import contractAddress from '../contract';
+
+const styles = {
+  container: {
+    padding: '2rem',
+    fontFamily: "'Roboto', sans-serif",
+    backgroundColor: '#f9fafb',
+    minHeight: '100vh',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  form: {
+    backgroundColor: '#fff',
+    padding: '2rem',
+    borderRadius: '12px',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    maxWidth: '600px',
+    boxSizing: 'border-box',
+  },
+  header: {
+    fontSize: '1.8rem',
+    fontWeight: '600',
+    marginBottom: '2rem',
+    color: '#2980b9',
+    textAlign: 'center',
+  },
+  label: {
+    display: 'block',
+    marginBottom: '0.5rem',
+    fontWeight: '500',
+    color: '#34495e',
+  },
+  input: {
+    width: '100%',
+    padding: '0.8rem',
+    marginBottom: '1.5rem',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '1rem',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  },
+  textarea: {
+    width: '100%',
+    padding: '0.8rem',
+    height: '100px',
+    marginBottom: '1.5rem',
+    borderRadius: '6px',
+    border: '1px solid #ccc',
+    fontSize: '1rem',
+    fontFamily: 'inherit',
+    boxSizing: 'border-box',
+    resize: 'vertical',
+  },
+  button: {
+    backgroundColor: '#2980b9',
+    color: '#fff',
+    border: 'none',
+    padding: '0.9rem 1.5rem',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '1rem',
+    width: '100%',
+    transition: 'background-color 0.3s',
+  },
+  statusMessage: {
+    marginTop: '1.2rem',
+    fontSize: '0.95rem',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+};
 
 const ContractModificationForm = ({ contractData }) => {
   const [description, setDescription] = useState(contractData.description);
@@ -27,7 +101,7 @@ const ContractModificationForm = ({ contractData }) => {
       }
 
       const currentDate = parseInt(contractData.deliveryDate);
-      const maxDate = currentDate + 30 * 24 * 60 * 60; // 30 days in seconds
+      const maxDate = currentDate + 30 * 24 * 60 * 60;
       const newDateTimestamp = Math.floor(new Date(newDeliveryDate).getTime() / 1000);
 
       if (newDateTimestamp > maxDate) {
@@ -51,46 +125,48 @@ const ContractModificationForm = ({ contractData }) => {
   };
 
   return (
-    <div className="p-4 bg-white rounded shadow-md">
-      <h2 className="text-xl font-bold mb-4">Modify Contract</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block font-medium">Description</label>
-          <textarea
-            className="w-full p-2 border rounded"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+    <div style={styles.container}>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <h2 style={styles.header}>Modify Contract</h2>
 
-        <div>
-          <label className="block font-medium">New Value (KES)</label>
-          <input
-            type="number"
-            className="w-full p-2 border rounded"
-            value={newValue}
-            onChange={(e) => setNewValue(parseInt(e.target.value))}
-          />
-        </div>
+        <label style={styles.label}>Description</label>
+        <textarea
+          style={styles.textarea}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
 
-        <div>
-          <label className="block font-medium">New Delivery Date</label>
-          <input
-            type="date"
-            className="w-full p-2 border rounded"
-            value={new Date(newDeliveryDate * 1000).toISOString().split('T')[0]}
-            onChange={(e) => setNewDeliveryDate(e.target.value)}
-          />
-        </div>
+        <label style={styles.label}>New Value (KES)</label>
+        <input
+          type="number"
+          style={styles.input}
+          value={newValue}
+          onChange={(e) => setNewValue(parseInt(e.target.value))}
+          min="0"
+        />
 
-        <button
-          type="submit"
-          className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
-        >
+        <label style={styles.label}>New Delivery Date</label>
+        <input
+          type="date"
+          style={styles.input}
+          value={new Date(newDeliveryDate * 1000).toISOString().split('T')[0]}
+          onChange={(e) => setNewDeliveryDate(e.target.value)}
+        />
+
+        <button type="submit" style={styles.button}>
           Submit Modification
         </button>
 
-        {status && <p className="mt-2 text-sm">{status}</p>}
+        {status && (
+          <p
+            style={{
+              ...styles.statusMessage,
+              color: status.startsWith("✅") ? "green" : "crimson",
+            }}
+          >
+            {status}
+          </p>
+        )}
       </form>
     </div>
   );

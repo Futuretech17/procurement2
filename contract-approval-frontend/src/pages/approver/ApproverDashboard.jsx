@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getProcurementContract } from '../../utils/contract';
 
-const statusMap = ['Pending', 'Approved', 'Modified'];
-
 const styles = {
   container: {
     padding: '2rem',
@@ -98,15 +96,50 @@ const ApproverDashboard = () => {
     const fetchContracts = async () => {
       try {
         const contract = await getProcurementContract();
-        const fetched = await contract.getAllContracts();
+        const total = Number((await contract.getTotalContracts()).toString());
+        const fetchedContracts = [];
 
-        const parsed = fetched.map((c, i) => ({
-          id: i,
-          title: c.title,
-          status: statusMap[Number(c.status)],
-        }));
+        for (let i = 1; i <= total; i++) {
+          try {
+            const data = await contract.getContractByIndex(i);
+            if (!data || !data[0]) continue;
 
-        setContracts(parsed);
+            const [
+              id,
+              title,
+              description,
+              supplierName,
+              creator,
+              value,
+              fileHash,
+              approvalsRaw,
+              isApproved,
+              lastModified,
+            ] = data;
+
+            const approvals = Number(approvalsRaw.toString());
+            const status = isApproved
+              ? 'Approved'
+              : approvals > 0
+              ? 'Modified'
+              : 'Pending';
+
+            const statusCode = isApproved ? 1 : approvals > 0 ? 2 : 0;
+
+            fetchedContracts.push({
+              id: Number(id),
+              title,
+              description,
+              createdBy: creator,
+              status,
+              statusCode,
+            });
+          } catch (err) {
+            console.warn(`Skipping contract index ${i}: ${err.message}`);
+          }
+        }
+
+        setContracts(fetchedContracts);
       } catch (error) {
         console.error('Failed to load contracts:', error);
       }
@@ -116,8 +149,8 @@ const ApproverDashboard = () => {
   }, []);
 
   const totalContracts = contracts.length;
-  const pendingCount = contracts.filter(c => c.status === 'Pending').length;
-  const modifiedCount = contracts.filter(c => c.status === 'Modified').length;
+  const pendingCount = contracts.filter((c) => c.statusCode === 0).length;
+  const modifiedCount = contracts.filter((c) => c.statusCode === 2).length;
 
   return (
     <div style={styles.container}>
@@ -143,18 +176,16 @@ const ApproverDashboard = () => {
       <div style={styles.buttonGroup}>
         <button
           style={styles.button}
-          onClick={() => navigate('/dashboard/approver/pending-contracts')}
+          onClick={() => navigate('/dashboard/approver/pending-approvals')}
         >
           Review Pending Contracts
         </button>
-
         <button
           style={styles.button}
           onClick={() => navigate('/dashboard/approver/modification-requests')}
         >
           View Modification Requests
         </button>
-
         <button
           style={styles.button}
           onClick={() => navigate('/dashboard/approver/approved-contracts')}
@@ -163,7 +194,7 @@ const ApproverDashboard = () => {
         </button>
       </div>
 
-      {/* Table */}
+      {/* Contracts Table */}
       <table style={styles.contractsTable}>
         <thead>
           <tr>
@@ -174,15 +205,15 @@ const ApproverDashboard = () => {
         </thead>
         <tbody>
           {contracts.length > 0 ? (
-            contracts.map(({ id, title, status }) => (
+            contracts.map(({ id, title, status, statusCode }) => (
               <tr key={id} style={styles.tableRow}>
                 <td style={styles.tableCell}>{title}</td>
                 <td
                   style={{
                     ...styles.tableCell,
-                    ...(status === 'Pending'
+                    ...(statusCode === 0
                       ? styles.statusPending
-                      : status === 'Approved'
+                      : statusCode === 1
                       ? styles.statusApproved
                       : styles.statusModified),
                   }}
@@ -197,7 +228,9 @@ const ApproverDashboard = () => {
                       padding: '0.4rem 0.8rem',
                       fontSize: '0.9rem',
                     }}
-                    onClick={() => navigate(`/dashboard/approver/contracts/${id}`)}
+                    onClick={() =>
+                      navigate(`/dashboard/approver/contracts/view/${id}`)
+                    }
                   >
                     Review
                   </button>

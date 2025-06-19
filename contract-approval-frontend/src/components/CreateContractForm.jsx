@@ -142,60 +142,41 @@ const CreateContractForm = () => {
       const endTimestamp = Math.floor(new Date(endDate).getTime() / 1000);
       const nowTimestamp = Math.floor(Date.now() / 1000);
 
-      if (
-        isNaN(startTimestamp) ||
-        isNaN(endTimestamp) ||
-        startTimestamp <= nowTimestamp ||
-        endTimestamp <= startTimestamp
-      ) {
-        setError(
-          "Please enter valid future start and end dates, with end date after start date."
-        );
-        return;
-      }
+    if (
+      isNaN(startTimestamp) ||
+      isNaN(endTimestamp) ||
+      startTimestamp <= nowTimestamp ||
+      endTimestamp <= startTimestamp
+    ) {
+      setError(
+        "Start date must be in the future, and end date must be after start date."
+      );
+      return;
+    }
 
       setLoading(true);
 
-      // ✅ Ensure wallet is connected
       await window.ethereum.request({ method: "eth_requestAccounts" });
 
-      // ✅ Upload file to IPFS backend
       const fileHash = await uploadFileToBackendIPFS(file);
 
-      console.log("📤 Submitting to contract...");
-      console.log("File hash:", fileHash);
-      console.log("Creating contract with:", {
-        title,
-        description,
-        supplier,
-        value: numericValue,
-        fileHash,
-        endTimestamp,
-      });
-
-      // ✅ Load contract
       const contract = await getProcurementContract();
-      console.log("Contract loaded:", contract);
 
-      // ✅ Send transaction
       const tx = await contract.createContract(
         title.trim(),
         description.trim(),
         supplier.trim(),
         BigInt(numericValue),
         fileHash,
-        endTimestamp
+        startTimestamp,   // ✅ NEW: Pass start date
+        endTimestamp      // ✅ Existing: End date
       );
-      
-      console.log("Transaction object:", tx);
 
-      console.log("Transaction sent:", tx.hash);
+
       await tx.wait();
-      console.log("✅ Contract created on-chain.");
 
       alert("Contract created successfully!");
 
-      // ✅ Reset form
       setTitle("");
       setDescription("");
       setSupplier("");

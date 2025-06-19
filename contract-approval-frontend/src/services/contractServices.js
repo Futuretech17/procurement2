@@ -1,25 +1,69 @@
-// src/services/contractService.js
+import { ethers } from "ethers";
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "../contract/contractABI";
 
+// ✅ Fetch contract details by ID (which maps to index - 1)
 export const getContractById = async (id) => {
-  // Mock contract data
-  return {
-    id,
-    title: "Road Construction Project",
-    description: "Construction of 5km road",
-    value: 100, // In ETH
-    deliveryDate: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60, // 30 days from now
-    isApproved: false,
-  };
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+    const total = await contract.getTotalContracts();
+    if (id <= 0 || id > Number(total)) {
+      throw new Error("Invalid contract ID.");
+    }
+
+    const data = await contract.getContractByIndex(id); // ✅ Now pass ID directly
+
+    return {
+      id: Number(data[0]),
+      title: data[1],
+      description: data[2],
+      supplierName: data[3],
+      creator: data[4],
+      value: data[5].toString(),
+      fileHash: data[6],
+      approvals: Number(data[7]),
+      isApproved: data[8],
+      lastModified: Number(data[9]),
+      startDate: Number(data[10]),
+      deliveryDate: Number(data[11]),
+    };
+  } catch (err) {
+    console.error("❌ Error fetching contract by ID:", err);
+    throw err;
+  }
 };
 
-export const modifyContractValue = async (id, newValue) => {
-  console.log(`✅ Directly modifying contract ${id} with new value: ${newValue} ETH`);
-  // Replace this with a smart contract write interaction
-  return true;
+
+// ✅ Modify the contract via smart contract
+export const modifyContract = async (id, updatedData) => {
+  try {
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+    const tx = await contract.modifyContract(
+      id,
+      updatedData.title,
+      updatedData.description,
+      updatedData.supplierName || "",
+      ethers.parseUnits(updatedData.value.toString(), "wei"),
+      updatedData.fileHash || "",
+      updatedData.deliveryDate
+    );
+
+    await tx.wait();
+    console.log(`✅ Contract ${id} modified successfully.`);
+    return true;
+  } catch (error) {
+    console.error("❌ Error modifying contract:", error);
+    throw error;
+  }
 };
 
+// 🟡 Submit modification request — can be updated further if logic is added in the contract
 export const submitModificationRequest = async (id, newValue) => {
-  console.log(`📨 Submitting modification request for contract ${id} with value: ${newValue} ETH`);
-  // Replace this with smart contract interaction for approval flow
+  console.log(`📨 Submitting modification request for contract ${id} with value: ${newValue}`);
   return true;
 };

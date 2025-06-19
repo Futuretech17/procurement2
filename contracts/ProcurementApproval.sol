@@ -18,19 +18,24 @@ contract ProcurementApproval {
         uint256 approvals;
         bool isApproved;
         uint256 lastModified;
+        uint256 startDate;       // ✅ Add this line
         uint256 deliveryDate;
     }
 
+
     struct ContractModificationRequest {
         uint256 contractId;
+        string newTitle;
         string newDescription;
         uint256 newValue;
         uint256 newDeliveryDate;
+        string newFileHash;
         address submittedBy;
         bool isReviewed;
         bool isApproved;
         uint256 approvals;
     }
+
 
     struct AuditLog {
         uint256 timestamp;
@@ -97,10 +102,24 @@ contract ProcurementApproval {
         _;
     }
 
+    modifier onlyReviewer() {
+    require(
+        roles[msg.sender] == Role.APPROVER || roles[msg.sender] == Role.AUDITOR,
+        "Only reviewers allowed"
+    );
+    _;
+}
+
+
     modifier validContract(uint256 _id) {
         require(_id > 0 && _id <= contractCounter, "Contract does not exist");
         _;
     }
+
+    function contractExists(uint256 id) public view returns (bool) {
+        return id > 0 && id <= contractCounter && contractStorage[id].id != 0;
+    }
+
 
     function createContract(
         string memory _title,
@@ -108,7 +127,8 @@ contract ProcurementApproval {
         string memory _supplierName,
         uint256 _value,
         string memory _fileHash,
-        uint256 _deliveryDate
+        uint256 _startDate,       // ✅ Add this
+        uint256 _deliveryDate     // Already there
     ) public onlyProcurementOfficer returns (uint256) {
         require(bytes(_title).length > 0, "Title required");
         require(bytes(_description).length > 0, "Description required");
@@ -117,21 +137,32 @@ contract ProcurementApproval {
         require(bytes(_fileHash).length > 0, "File hash required");
         require(_deliveryDate > block.timestamp, "Delivery must be in future");
 
-        contractCounter++;
-        ProcurementContract storage newContract = contractStorage[contractCounter];
-        newContract.id = contractCounter;
-        newContract.title = _title;
-        newContract.description = _description;
-        newContract.supplierName = _supplierName;
-        newContract.creator = msg.sender;
-        newContract.value = _value;
-        newContract.fileHash = _fileHash;
-        newContract.lastModified = block.timestamp;
-        newContract.deliveryDate = _deliveryDate;
+        require(_startDate >= block.timestamp, "Start date must be now or future");
+        require(_deliveryDate > _startDate, "End date must be after start date");
 
-        emit ContractCreated(contractCounter, _title, msg.sender);
-        _logAudit(contractCounter, "Contract Created", msg.sender, _title);
-        return contractCounter;
+
+    contractCounter += 1;
+    uint256 newId = contractCounter;
+
+    contractStorage[newId] = ProcurementContract({
+        id: newId,
+        title: _title,
+        description: _description,
+        supplierName: _supplierName,
+        creator: msg.sender,
+        value: _value,
+        fileHash: _fileHash,
+        approvals: 0,
+        isApproved: false,
+        lastModified: block.timestamp,
+        startDate: _startDate,               // ✅ Add this
+        deliveryDate: _deliveryDate
+    });
+
+    emit ContractCreated(newId, _title, msg.sender);
+    _logAudit(newId, "Contract Created", msg.sender, _title);
+    return newId;
+
     }
 
     function approveContract(uint256 _id) public onlyApprover validContract(_id) {
@@ -167,11 +198,38 @@ contract ProcurementApproval {
         _logAudit(_id, "Direct Value Modified", msg.sender, "Within 10% limit");
     }
 
+        function modifyContract(
+        uint256 _id,
+        string memory newTitle,
+        string memory newDescription,
+        string memory newSupplierName,
+        uint256 newValue,
+        string memory newFileHash,
+        uint256 newDeliveryDate
+    ) public onlyProcurementOfficer validContract(_id) {
+        ProcurementContract storage c = contractStorage[_id];
+        require(!c.isApproved, "Cannot modify approved contract");
+
+        c.title = newTitle;
+        c.description = newDescription;
+        c.supplierName = newSupplierName;
+        c.value = newValue;
+        c.fileHash = newFileHash;
+        c.deliveryDate = newDeliveryDate;
+        c.lastModified = block.timestamp;
+
+        emit ContractModified(_id, newValue, msg.sender);
+        _logAudit(_id, "Contract Modified", msg.sender, "Full direct update");
+    }
+
+
     function submitModificationRequest(
         uint256 _contractId,
+        string memory _newTitle,
         string memory _newDescription,
         uint256 _newValue,
-        uint256 _newDeliveryDate
+        uint256 _newDeliveryDate,
+        string memory _newFileHash
     ) public onlyProcurementOfficer validContract(_contractId) {
         require(!hasPendingModification[_contractId], "Pending modification exists");
 
@@ -187,9 +245,11 @@ contract ProcurementApproval {
 
         modificationRequests[_contractId] = ContractModificationRequest({
             contractId: _contractId,
+            newTitle: _newTitle,
             newDescription: _newDescription,
             newValue: _newValue,
             newDeliveryDate: _newDeliveryDate,
+            newFileHash: _newFileHash,
             submittedBy: msg.sender,
             isReviewed: false,
             isApproved: false,
@@ -200,6 +260,7 @@ contract ProcurementApproval {
         emit ModificationRequested(_contractId, _newValue, msg.sender);
         _logAudit(_contractId, "Modification Requested", msg.sender, _newDescription);
     }
+
 
     function reviewModificationRequest(uint256 _contractId, bool approve) public onlyApprover validContract(_contractId) {
         require(hasPendingModification[_contractId], "No pending modification");
@@ -216,10 +277,13 @@ contract ProcurementApproval {
 
         if (req.approvals >= approvers.length) {
             ProcurementContract storage c = contractStorage[_contractId];
+            c.title = req.newTitle;
             c.description = req.newDescription;
             c.value = req.newValue;
             c.deliveryDate = req.newDeliveryDate;
+            c.fileHash = req.newFileHash;
             c.lastModified = block.timestamp;
+
 
             req.isReviewed = true;
             req.isApproved = true;
@@ -248,22 +312,68 @@ contract ProcurementApproval {
         return auditLogs[_contractId];
     }
 
-    function getContract(uint256 _id) public view validContract(_id) returns (
-        uint256, string memory, string memory, string memory,
-        address, uint256, string memory, uint256, bool, uint256
+    function getModificationRequest(uint256 contractId) public view onlyReviewer returns (
+        uint256 contractId_,
+        string memory newTitle,
+        string memory newDescription,
+        uint256 newValue,
+        uint256 newDeliveryDate,
+        string memory newFileHash,
+        address submittedBy,
+        bool isReviewed,
+        bool isApproved,
+        uint256 approvals
     ) {
-        ProcurementContract storage c = contractStorage[_id];
-        return (c.id, c.title, c.description, c.supplierName, c.creator,
-            c.value, c.fileHash, c.approvals, c.isApproved, c.lastModified);
+        ContractModificationRequest storage r = modificationRequests[contractId];
+        return (
+            r.contractId,
+            r.newTitle,
+            r.newDescription,
+            r.newValue,
+            r.newDeliveryDate,
+            r.newFileHash,
+            r.submittedBy,
+            r.isReviewed,
+            r.isApproved,
+            r.approvals
+        );
     }
 
-    function getAllContracts() public view returns (ProcurementContract[] memory) {
-        ProcurementContract[] memory allContracts = new ProcurementContract[](contractCounter);
-        for (uint256 i = 1; i <= contractCounter; i++) {
-            allContracts[i - 1] = contractStorage[i];
-        }
-        return allContracts;
+
+    function getContract(uint256 _id) public view validContract(_id) returns (
+        uint256, string memory, string memory, string memory,
+        address, uint256, string memory, uint256, bool, uint256,
+        uint256, uint256 // 🆕 startDate and deliveryDate
+    ) {
+        ProcurementContract storage c = contractStorage[_id];
+        return (
+            c.id, c.title, c.description, c.supplierName,
+            c.creator, c.value, c.fileHash,
+            c.approvals, c.isApproved, c.lastModified,
+            c.startDate, c.deliveryDate
+        );
     }
+
+    function getContractByIndex(uint256 id) public view returns (
+        uint256, string memory, string memory, string memory,
+        address, uint256, string memory, uint256, bool, uint256,
+        uint256, uint256 // ✅ startDate and deliveryDate
+    ) {
+        require(contractExists(id), "Invalid contract ID");
+        ProcurementContract storage c = contractStorage[id];
+        return (
+            c.id, c.title, c.description, c.supplierName,
+            c.creator, c.value, c.fileHash,
+            c.approvals, c.isApproved, c.lastModified,
+            c.startDate, c.deliveryDate
+        );
+    }
+
+
+    function getTotalContracts() public view returns (uint256) {
+        return contractCounter;
+    }
+
 
     function getUserRole(address _user) public view returns (Role) {
         return roles[_user];
@@ -278,6 +388,7 @@ contract ProcurementApproval {
     }
 
     function isModificationPending(uint256 _contractId) public view returns (bool) {
+        require(contractExists(_contractId), "Invalid contract ID");
         return hasPendingModification[_contractId];
     }
 
